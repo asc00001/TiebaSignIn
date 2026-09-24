@@ -163,8 +163,14 @@ def send_pushplus(
             "template": "html",
         }
         client = http or requests
-        r = client.get("http://www.pushplus.plus/send", params=payload, timeout=10)
-        logger.info(f"PushPlus 响应: {r.text[:100]}")
+        r = client.post("https://www.pushplus.plus/send", json=payload, timeout=10)
+        r.raise_for_status()
+        response = r.json()
+        code = response.get("code") if isinstance(response, dict) else None
+        if code != 200:
+            logger.error("PushPlus 请求未受理: code=%s", code)
+            return False
+        logger.info("PushPlus 请求已受理")
         return True
     except Exception as e:
         logger.error(f"PushPlus 推送失败: {e}")

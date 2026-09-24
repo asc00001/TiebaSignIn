@@ -149,6 +149,14 @@ class TestGetTbsSetsLogin(unittest.TestCase):
         self.assertEqual(tbs, "abc")
         self.assertTrue(c.logged_in)
 
+    def test_logged_in_true_when_numeric(self):
+        c = TiebaClient("b")
+        with mock.patch.object(c, "_request",
+                               return_value={"is_login": 1, "tbs": "abc"}):
+            tbs = c.get_tbs()
+        self.assertEqual(tbs, "abc")
+        self.assertTrue(c.logged_in)
+
     def test_logged_in_false(self):
         c = TiebaClient("b")
         with mock.patch.object(c, "_request",
@@ -214,21 +222,28 @@ class TestPushPlus(unittest.TestCase):
     def test_send_pushplus_calls_endpoint(self):
         fake_http = mock.MagicMock()
         fake_resp = mock.MagicMock()
-        fake_resp.text = '{"code":200}'
-        fake_http.get.return_value = fake_resp
+        fake_resp.json.return_value = {"code": 200}
+        fake_http.post.return_value = fake_resp
         ok = run.send_pushplus("mytoken", "内容正文", logged_in=True, http=fake_http)
         self.assertTrue(ok)
-        self.assertTrue(fake_http.get.called)
-        url = fake_http.get.call_args[0][0]
-        params = fake_http.get.call_args[1].get("params", {})
-        self.assertIn("pushplus.plus/send", url)
-        self.assertEqual(params.get("token"), "mytoken")
+        fake_resp.raise_for_status.assert_called_once_with()
+        url = fake_http.post.call_args[0][0]
+        payload = fake_http.post.call_args[1].get("json", {})
+        self.assertEqual(url, "https://www.pushplus.plus/send")
+        self.assertEqual(payload.get("token"), "mytoken")
+        self.assertFalse(fake_http.get.called)
+
+    def test_send_pushplus_rejected_code(self):
+        fake_http = mock.MagicMock()
+        fake_http.post.return_value.json.return_value = {"code": 903}
+        ok = run.send_pushplus("mytoken", "内容正文", http=fake_http)
+        self.assertFalse(ok)
 
     def test_send_pushplus_empty_token_skips(self):
         fake_http = mock.MagicMock()
         ok = run.send_pushplus("", "x", logged_in=True, http=fake_http)
         self.assertFalse(ok)
-        self.assertFalse(fake_http.get.called)
+        self.assertFalse(fake_http.post.called)
 
 
 if __name__ == "__main__":
